@@ -13,6 +13,7 @@ import (
 	"github.com/vertti/preflight/pkg/envcheck"
 	"github.com/vertti/preflight/pkg/filecheck"
 	"github.com/vertti/preflight/pkg/tcpcheck"
+	"github.com/vertti/preflight/pkg/usercheck"
 	"github.com/vertti/preflight/pkg/version"
 )
 
@@ -60,6 +61,13 @@ var tcpCmd = &cobra.Command{
 	RunE:  runTCPCheck,
 }
 
+var userCmd = &cobra.Command{
+	Use:   "user <username>",
+	Short: "Check that a user exists and meets requirements",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runUserCheck,
+}
+
 var (
 	// cmd flags
 	minVersion   string
@@ -91,6 +99,11 @@ var (
 
 	// tcp flags
 	tcpTimeout time.Duration
+
+	// user flags
+	userUID  string
+	userGID  string
+	userHome string
 )
 
 func init() {
@@ -128,6 +141,12 @@ func init() {
 	// tcp subcommand
 	tcpCmd.Flags().DurationVar(&tcpTimeout, "timeout", 5*time.Second, "connection timeout")
 	rootCmd.AddCommand(tcpCmd)
+
+	// user subcommand
+	userCmd.Flags().StringVar(&userUID, "uid", "", "expected user ID")
+	userCmd.Flags().StringVar(&userGID, "gid", "", "expected primary group ID")
+	userCmd.Flags().StringVar(&userHome, "home", "", "expected home directory")
+	rootCmd.AddCommand(userCmd)
 }
 
 func runCmdCheck(cmd *cobra.Command, args []string) error {
@@ -235,6 +254,26 @@ func runTCPCheck(cmd *cobra.Command, args []string) error {
 		Address: address,
 		Timeout: tcpTimeout,
 		Dialer:  &tcpcheck.RealDialer{},
+	}
+
+	result := c.Run()
+	printResult(result)
+
+	if !result.OK() {
+		os.Exit(1)
+	}
+	return nil
+}
+
+func runUserCheck(cmd *cobra.Command, args []string) error {
+	username := args[0]
+
+	c := &usercheck.Check{
+		Username: username,
+		UID:      userUID,
+		GID:      userGID,
+		Home:     userHome,
+		Lookup:   &usercheck.RealUserLookup{},
 	}
 
 	result := c.Run()
